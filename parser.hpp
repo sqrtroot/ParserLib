@@ -1,3 +1,4 @@
+#include <fmt/core.h>
 #include <functional>
 #include <optional>
 #include <string_view>
@@ -23,7 +24,8 @@ struct Transform {
   F transformer;
   T parser;
 
-  Transform(F transformer, T &&t): transformer(transformer), parser(std::forward<T>(t)) {}
+  Transform(F transformer, T &&t):
+      transformer(transformer), parser(std::forward<T>(t)) {}
 
   constexpr Parsed<result_t> parse(std::string_view input) const {
     if(auto parsed = parser.parse(input)) {
@@ -40,7 +42,7 @@ struct Literal {
   constexpr Parsed<result_t> parse(std::string_view input) const {
     if(input.starts_with(literal)) {
       input.remove_prefix(literal.size());
-      return Result(literal, input);
+      return Result(std::string_view(input.begin(), literal.length()), input);
     }
     return std::nullopt;
   };
@@ -95,7 +97,7 @@ struct Optional {
   };
 };
 
-template<typename T>
+template<typename T, typename F>
 struct Plus {
   using result_t = std::vector<typename T::result_t>;
   T t;
@@ -117,8 +119,30 @@ struct Plus {
 };
 
 template<typename T>
+Plus(T) -> Plus<T, typename T::result_t>;
+
+template<typename T>
+struct Plus<T, std::string_view> {
+  using result_t = std::string_view;
+  T t;
+  constexpr Plus(T &&t): t(t){};
+  constexpr Parsed<result_t> parse(std::string_view input) const {
+    auto v = t.parse(input);
+    if(!v.has_value()) {
+      return std::nullopt;
+    }
+    auto last_good = v;
+    while((v = t.parse(v->remainder))) {
+      last_good = v;
+    }
+    return Result(std::string_view(&input.front(), &last_good->result.back()),
+                  last_good->remainder);
+  };
+};
+
+template<typename T>
 struct Star {
-  Optional<Plus<T>> t;
+  Optional<Plus<T, typename T::result_t>> t;
   using result_t = typename decltype(t)::result_t;
   constexpr Star(T &&t): t(Optional(Plus(std::move(t)))){};
   constexpr Parsed<result_t> parse(std::string_view input) const {

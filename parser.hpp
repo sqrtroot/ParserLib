@@ -1,134 +1,111 @@
-#include <string_view>
+#include <functional>
 #include <optional>
+#include <string_view>
 #include <tuple>
+#include <variant>
 
-template <typename... T>
-struct Parser
-{
-    std::tuple<T...> parser;
+template<typename T>
+struct Result {
+  using result_t = T;
+  result_t         result;
+  std::string_view remainder;
 
-    constexpr Parser(T &&...t) : parser(std::move(t)...){};
-
-    template <typename nT>
-    constexpr auto then(nT &&t)
-    {
-        const auto const_arg_tuple = std::tuple_cat(parser, std::make_tuple(std::move(t)));
-        return std::make_from_tuple<Parser<T..., nT>>(const_arg_tuple);
-    }
-
-    constexpr std::optional<std::string_view> _parse_impl(std::string_view input) const
-    {
-        return input;
-    }
-
-    template <typename P, typename... Ps>
-    constexpr std::optional<std::string_view> _parse_impl(std::string_view input, const P &parser, const Ps &...parsers) const
-    {
-        auto next_input = parser.parse(input);
-        if constexpr (sizeof...(Ps) > 0)
-        {
-            if (next_input)
-            {
-                return _parse_impl(*next_input, parsers...);
-            }
-        }
-        return next_input;
-    }
-    constexpr std::optional<std::string_view> parse(std::string_view input) const
-    {
-        return std::apply([&](T... tupleArgs) { return _parse_impl(input, tupleArgs...); }, parser);
-    }
+  constexpr Result(T result, std::string_view sv): result(result), remainder(sv){};
 };
 
-struct Literal
-{
-    std::string_view literal;
-    constexpr Literal(std::string_view literal) : literal(literal){};
+template<typename T>
+using Parsed = std::optional<Result<T>>;
 
-    constexpr std::optional<std::string_view> parse(std::string_view input) const
-    {
-        if (input.starts_with(literal))
-        {
-            input.remove_prefix(literal.size());
-            return input;
-        }
-        return std::nullopt;
-    };
-};
-template <typename T>
-struct Optional
-{
-    T t;
-    constexpr Optional(T &&t) : t(t){};
+struct Literal {
+  using result_t = std::string_view;
+  std::string_view literal;
+  constexpr Literal(std::string_view literal): literal(literal){};
 
-    constexpr std::optional<std::string_view> parse(std::string_view input) const
-    {
-        if (auto v = t.parse(input))
-        {
-            return *v;
-        }
-        return input;
-    };
-};
-
-template <typename T>
-struct Plus
-{
-    T t;
-    constexpr Plus(T &&t) : t(t){};
-
-    constexpr std::optional<std::string_view> parse(std::string_view input) const
-    {
-        auto v = t.parse(input);
-        if (!v.has_value())
-        {
-            return std::nullopt;
-        }
-        while (auto new_input = t.parse(*v))
-        {
-            v = *new_input;
-        };
-        return v;
-    };
-};
-
-template <typename T>
-struct Star
-{
-    Optional<Plus<T>> t;
-    constexpr Star(T &&t) : t(Optional(Plus(std::move(t)))){};
-    constexpr std::optional<std::string_view> parse(std::string_view input) const
-    {
-        return t.parse(input);
+  constexpr Parsed<result_t> parse(std::string_view input) const {
+    if(input.starts_with(literal)) {
+      input.remove_prefix(literal.size());
+      return Result(literal, input);
     }
+    return std::nullopt;
+  };
 };
 
-template <typename... Parsers>
-struct Choice
-{
-    std::tuple<Parsers...> parsers;
+template<typename... T>
+struct Parser {
+  std::tuple<T...> parsers;
+  using result_t = std::tuple<typename T::result_t...>;
+  Parser(T &&...ts): parsers(std::move(ts)...) {}
 
-    Choice(Parsers &&...parsers) : parsers(std::move(parsers)...){};
-
-    template <typename P, typename... Ps>
-    constexpr std::optional<std::string_view> _parse_impl(std::string_view input, const P &parser, const Ps &...parsers) const
-    {
-        if (auto next_input = parser.parse(input))
-        {
-            return *next_input;
-        };
-
-        if constexpr (sizeof...(Ps) > 0)
-        {
-            return _parse_impl(input, parsers...);
-        }
-        else
-        {
-            return std::nullopt;
-        }
+  template<typename P>
+  constexpr Parsed<std::tuple<typename P::result_t>>
+    parse_impl(std::string_view input, const P &parser) const {
+    if(auto parsed = parser.parse(input)) {
+      return Result(std::make_tuple(parsed->result), parsed->remainder);
     }
-    constexpr std::optional<std::string_view> parse(std::string_view input) const
-    {
-        return std::apply([&](Parsers... tupleArgs) { return _parse_impl(input, tupleArgs...); }, parsers);
+    return std::nullopt;
+  }
+
+  template<typename P, typename... Ps>
+  constexpr Parsed<std::tuple<typename P::result_t, typename Ps::result_t...>>
+    parse_impl(std::string_view input, const P &parser, const Ps &...parsers) const {
+    if(auto parsed = parser.parse(input)) {
+      auto next_result = parse_impl(parsed->remainder, parsers...);
+      if(next_result) {
+        return Result(std::tuple_cat(std::make_tuple(parsed->result), next_result->result),
+                      next_result->remainder);
+      }
     }
+    return std::nullopt;
+  }
+
+  constexpr auto parse(std::string_view input) const {
+    return std::apply([&](auto &...ts) { return parse_impl(input, ts...); }, parsers);
+  };
+};
+
+template<typename T>
+struct Optional {
+  using result_t = std::optional<typename T::result_t>;
+
+  T t;
+
+  constexpr Optional(T &&t): t(std::forward<T>(t)){};
+
+  constexpr Parsed<result_t> parse(std::string_view input) const {
+    if(auto v = t.parse(input)) {
+      return Result(std::make_optional(v->result), v->remainder);
+    }
+    return Result(result_t(std::nullopt), input);
+  };
+};
+
+template<typename T>
+struct Plus {
+  using result_t = std::vector<typename T::result_t>;
+  T t;
+  constexpr Plus(T &&t): t(t){};
+
+  constexpr Parsed<result_t> parse(std::string_view input) const {
+    auto v = t.parse(input);
+    if(!v.has_value()) {
+      return std::nullopt;
+    }
+    result_t out;
+    auto     last_good = v;
+    do {
+      out.emplace_back(std::move(v->result));
+      last_good = v;
+    } while((v = t.parse(v->remainder)));
+    return Result(out, last_good->remainder);
+  };
+};
+
+template<typename T>
+struct Star {
+  Optional<Plus<T>> t;
+  using result_t = typename decltype(t)::result_t;
+  constexpr Star(T &&t): t(Optional(Plus(std::move(t)))){};
+  constexpr Parsed<result_t> parse(std::string_view input) const {
+    return t.parse(input);
+  }
 };

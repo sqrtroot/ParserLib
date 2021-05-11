@@ -149,3 +149,29 @@ struct Star {
     return t.parse(input);
   }
 };
+
+template<typename... Ts>
+struct Choice {
+  std::tuple<Ts...> choices;
+  using result_t = std::variant<typename Ts::result_t...>;
+  constexpr Choice(Ts &&...choices): choices(std::move(choices)...){};
+
+  template<typename P, typename... Ps>
+  constexpr Parsed<result_t>
+    _parse_impl(std::string_view input, const P &parser, const Ps &...parsers) const {
+    if(auto output = parser.parse(input)) {
+      return Result(result_t(output->result), output->remainder);
+    };
+
+    if constexpr(sizeof...(Ps) > 0) {
+      return _parse_impl(input, parsers...);
+    } else {
+      return std::nullopt;
+    }
+  }
+
+  constexpr Parsed<result_t> parse(std::string_view input) const {
+    return std::apply(
+      [&](Ts... tupleArgs) { return _parse_impl(input, tupleArgs...); }, choices);
+  }
+};

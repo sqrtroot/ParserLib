@@ -156,22 +156,21 @@ struct Choice {
   using result_t = std::variant<typename Ts::result_t...>;
   constexpr Choice(Ts &&...choices): choices(std::move(choices)...){};
 
-  template<typename P, typename... Ps>
+  template<size_t I, size_t... Is>
   constexpr Parsed<result_t>
-    _parse_impl(std::string_view input, const P &parser, const Ps &...parsers) const {
-    if(auto output = parser.parse(input)) {
-      return Result(result_t(output->result), output->remainder);
+    parse_impl(std::string_view input, std::index_sequence<I, Is...>) const {
+    if(auto output = std::get<I>(choices).parse(input)) {
+      return Result(result_t(std::in_place_index_t<I>{}, output->result), output->remainder);
     };
 
-    if constexpr(sizeof...(Ps) > 0) {
-      return _parse_impl(input, parsers...);
+    if constexpr(sizeof...(Is) > 0) {
+      return parse_impl(input, std::index_sequence<Is...>{});
     } else {
       return std::nullopt;
     }
   }
 
   constexpr Parsed<result_t> parse(std::string_view input) const {
-    return std::apply(
-      [&](Ts... tupleArgs) { return _parse_impl(input, tupleArgs...); }, choices);
-  }
+    return parse_impl(input, std::make_index_sequence<sizeof...(Ts)>{});
+  };
 };

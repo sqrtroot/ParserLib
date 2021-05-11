@@ -39,13 +39,12 @@ int main() {
   // auto parser = Parser(Transform([](auto) { return 0; }, Literal("0")),
   //                      Plus(Literal("o")));
   // auto parser = Transform([](auto){return 0;}, Literal("0"));
-  auto        parser = Choice(Transform([](auto) { return 0; }, Literal("i")),
-                       Transform([](auto) { return true; }, Literal("b")));
+  auto        parser = Choice(Transform([](auto) { return false; }, Literal("f")),
+                       Transform([](auto) { return true; }, Literal("t")));
   std::string input;
   std::cin >> input;
   auto parsed = parser.parse(input);
   if(parsed) {
-    // auto x = fmt::join(parsed->result, ", ");
     fmt::print("Parsed:    {}\nRemainder: {}\n", parsed->result, parsed->remainder);
   } else {
     fmt::print("Failed parsing\n");

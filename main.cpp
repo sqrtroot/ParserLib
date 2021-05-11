@@ -39,8 +39,12 @@ int main() {
   // auto parser = Parser(Transform([](auto) { return 0; }, Literal("0")),
   //                      Plus(Literal("o")));
   // auto parser = Transform([](auto){return 0;}, Literal("0"));
-  auto        parser = Choice(Transform([](auto) { return false; }, Literal("f")),
-                       Transform([](auto) { return true; }, Literal("t")));
+  // auto        parser = Choice(Transform([](auto) { return false; }, Literal("f")),
+  //                      Transform([](auto) { return true; }, Literal("t")));
+  auto parser =
+    Parser(Literal("h"),
+           Transform([](auto e) { return e == "o"; }, Choice(Literal("o"), Literal("a"))),
+           Literal("i"));
   std::string input;
   std::cin >> input;
   auto parsed = parser.parse(input);

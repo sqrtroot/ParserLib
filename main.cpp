@@ -20,7 +20,9 @@ struct fmt::formatter<std::optional<T>> {
 };
 
 int main() {
-  auto        parser = Parser(Literal("h"), Plus(Literal("o")));
+  auto parser = Parser(Transform([](auto) { return 0; }, Literal("0")),
+                       Plus(Literal("o")));
+  // auto parser = Transform([](auto){return 0;}, Literal("0"));
   std::string input;
   std::cin >> input;
   auto parsed = parser.parse(input);

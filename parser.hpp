@@ -16,6 +16,22 @@ struct Result {
 template<typename T>
 using Parsed = std::optional<Result<T>>;
 
+template<typename T, typename F>
+struct Transform {
+  using result_t = std::result_of_t<F(typename T::result_t)>;
+
+  F transformer;
+  T parser;
+
+  Transform(F transformer, T &&t): transformer(transformer), parser(std::forward<T>(t)) {}
+
+  constexpr Parsed<result_t> parse(std::string_view input) const {
+    if(auto parsed = parser.parse(input)) {
+      return Result(transformer(parsed->result), parsed->remainder);
+    }
+    return std::nullopt;
+  }
+};
 struct Literal {
   using result_t = std::string_view;
   std::string_view literal;

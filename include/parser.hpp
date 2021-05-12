@@ -43,8 +43,9 @@ struct Literal {
 
   constexpr Parsed<result_t> parse(std::string_view input) const {
     if(input.starts_with(literal)) {
+      const std::string_view result_view{input.begin(), literal.length()};
       input.remove_prefix(literal.size());
-      return Result(std::string_view(input.begin(), literal.length()), input);
+      return Result(result_view, input);
     }
     return std::nullopt;
   };

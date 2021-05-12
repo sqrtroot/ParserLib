@@ -152,7 +152,7 @@ struct Plus {
     result_t out;
     auto     last_good = v;
     do {
-      out.emplace_back(std::move(v->result));
+      out.push_back(v->result);
       last_good = v;
     } while((v = t.parse(v->remainder)));
     return Result(out, last_good->remainder);
@@ -176,7 +176,7 @@ struct Plus<T, std::string_view> {
     while((v = t.parse(v->remainder))) {
       last_good = v;
     }
-    return Result(std::string_view(&input.front(), &last_good->result.back()),
+    return Result(std::string_view(input.begin(), last_good->result.end()),
                   last_good->remainder);
   };
 };

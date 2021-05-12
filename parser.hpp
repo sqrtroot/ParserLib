@@ -81,7 +81,6 @@ struct Parser<std::false_type, T...> {
   }
 
   constexpr auto parse(std::string_view input) const {
-    fmt::print("Parsing multiple types\n");
     return std::apply([&](auto &...ts) { return parse_impl(input, ts...); }, parsers);
   };
 };
@@ -114,7 +113,6 @@ struct Parser<std::true_type, T...> {
   }
 
   constexpr auto parse(std::string_view input) const {
-    fmt::print("Parsing std::string_views \n");
     return std::apply([&](auto &...ts) { return parse_impl(input, ts...); }, parsers);
   };
 };

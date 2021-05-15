@@ -4,21 +4,49 @@
 #include <string_view>
 #include <tuple>
 #include <variant>
-// Some types have a secondary type in front called only_stringviews
-// This type is used to optimize if there's no transforms applied yet.
+/**
+ * @file parser.hpp
+ * @brief File containing all the basic parsing to construct usefull parser combinators.
+ *
+ * Some types have 2 implementations. One for general types and one for string_views.
+ * String_views are the basic non transformed representation of a match for this library.
+ * They give us the abbility to pass safe substrings without allocating memory, and are easy to work with (have == operator, etc.)
+ */
+// IDEAS: if a choice parser gets a choice, we can unnest them
 
+/**
+ * @brief Result of parsing.
+ *
+ * For parsers it should be wrapped in a Parsed object
+ * @see Parsed
+ * @tparam T result type
+ */
 template<typename T>
 struct Result {
   using result_t = T;
-  result_t         result;
-  std::string_view remainder;
+  result_t         result;       //!< the result
+  std::string_view remainder;    //!< what's left after parsing
 
-  constexpr Result(T result, std::string_view sv): result(result), remainder(sv){};
+  constexpr Result(T result, std::string_view remainder):
+      result(result), remainder(remainder){};
 };
 
+/**
+ * @brief Output of parsing
+ * This will hold a value if parsing was succesfull and no value if parsing failed
+ * @tparam T Type of parse output made into Result<T>
+ */
 template<typename T>
 using Parsed = std::optional<Result<T>>;
 
+/**
+ * @brief Transform the type of a parser
+ *
+ * With this you can transform from a basic string_view (or any other parsing result) into another type.
+ *
+ * @tparam T Original Parser
+ * @tparam F Transformer result type
+ */
 template<typename T, typename F>
 struct Transform {
   using result_t = std::result_of_t<F(typename T::result_t)>;
@@ -36,6 +64,12 @@ struct Transform {
     return std::nullopt;
   }
 };
+/**
+ * @brief Parser that parses a Literal
+ *
+ * This is the most basic of parser, parsing one or multiple characters.
+ *
+ */
 struct Literal {
   using result_t = std::string_view;
   std::string_view literal;
@@ -50,6 +84,12 @@ struct Literal {
     return std::nullopt;
   };
 };
+/**
+ * @brief Parser that parses based on a predicate
+ *
+ * If the predicate is returns true this parser will succeed and give a result with the first character. Otherwise it will fail
+ * @tparam T
+ */
 template<typename T>
 struct Predicate {
   using result_t = std::string_view;

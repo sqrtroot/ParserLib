@@ -26,7 +26,7 @@ struct Transform {
   F transformer;
   T parser;
 
-  Transform(F transformer, T &&t):
+  Transform(F transformer, T t):
       transformer(transformer), parser(std::forward<T>(t)) {}
 
   constexpr Parsed<result_t> parse(std::string_view input) const {
@@ -50,6 +50,19 @@ struct Literal {
     return std::nullopt;
   };
 };
+template<typename T>
+struct Predicate {
+  using result_t = std::string_view;
+  T predicate;
+  constexpr Predicate(T predicate): predicate(predicate){};
+
+  constexpr Parsed<result_t> parse(std::string_view input) const {
+    if(predicate(input.front())) {
+      return Result(std::string_view(input.begin(), 1), input.substr(1));
+    };
+    return std::nullopt;
+  };
+};
 template<typename only_stringviews, typename... T>
 struct Parser;
 
@@ -57,7 +70,7 @@ template<typename... T>
 struct Parser<std::false_type, T...> {
   std::tuple<T...> parsers;
   using result_t = std::tuple<typename T::result_t...>;
-  Parser(T &&...ts): parsers(std::move(ts)...) {}
+  Parser(T... ts): parsers(ts...) {}
 
   template<typename P>
   constexpr Parsed<std::tuple<typename P::result_t>>
@@ -90,7 +103,7 @@ template<typename... T>
 struct Parser<std::true_type, T...> {
   std::tuple<T...> parsers;
   using result_t = std::string_view;
-  Parser(T &&...ts): parsers(std::move(ts)...) {}
+  Parser(T... ts): parsers(ts...) {}
 
   template<typename P>
   constexpr Parsed<std::string_view> parse_impl(std::string_view input, const P &parser) const {
@@ -128,7 +141,7 @@ struct Optional {
 
   T t;
 
-  constexpr Optional(T &&t): t(std::forward<T>(t)){};
+  constexpr Optional(T t): t(std::forward<T>(t)){};
 
   constexpr Parsed<result_t> parse(std::string_view input) const {
     if(auto v = t.parse(input)) {
@@ -142,7 +155,7 @@ template<typename T, typename F>
 struct Plus {
   using result_t = std::vector<typename T::result_t>;
   T t;
-  constexpr Plus(T &&t): t(t){};
+  constexpr Plus(T t): t(t){};
 
   constexpr Parsed<result_t> parse(std::string_view input) const {
     auto v = t.parse(input);
@@ -166,7 +179,7 @@ template<typename T>
 struct Plus<T, std::string_view> {
   using result_t = std::string_view;
   T t;
-  constexpr Plus(T &&t): t(t){};
+  constexpr Plus(T t): t(t){};
   constexpr Parsed<result_t> parse(std::string_view input) const {
     auto v = t.parse(input);
     if(!v.has_value()) {
@@ -176,8 +189,7 @@ struct Plus<T, std::string_view> {
     while((v = t.parse(v->remainder))) {
       last_good = v;
     }
-    return Result(std::string_view(input.begin(), last_good->result.end()),
-                  last_good->remainder);
+    return Result(std::string_view(input.begin(), last_good->result.end()), last_good->remainder);
   };
 };
 
@@ -185,7 +197,7 @@ template<typename T>
 struct Star {
   Optional<Plus<T, typename T::result_t>> t;
   using result_t = typename decltype(t)::result_t;
-  constexpr Star(T &&t): t(Optional(Plus(std::move(t)))){};
+  constexpr Star(T t): t(Optional(Plus(t))){};
   constexpr Parsed<result_t> parse(std::string_view input) const {
     return t.parse(input);
   }
@@ -197,7 +209,7 @@ template<typename... Ts>
 struct Choice<std::false_type, Ts...> {
   std::tuple<Ts...> choices;
   using result_t = std::variant<typename Ts::result_t...>;
-  constexpr Choice(Ts &&...choices): choices(std::move(choices)...){};
+  constexpr Choice(Ts... choices): choices(choices...){};
 
   template<size_t I, size_t... Is>
   constexpr Parsed<result_t>
@@ -222,7 +234,7 @@ template<typename... Ts>
 struct Choice<std::true_type, Ts...> {
   std::tuple<Ts...> choices;
   using result_t = typename std::tuple_element_t<0, std::tuple<Ts...>>::result_t;
-  constexpr Choice(Ts &&...choices): choices(std::move(choices)...){};
+  constexpr Choice(Ts... choices): choices(choices...){};
 
   template<size_t I, size_t... Is>
   constexpr Parsed<result_t>
